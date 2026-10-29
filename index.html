@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Action Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Layout: one centred column. Summary strip, add form, then one card per owner. */
+  :root {
+    color-scheme: light;
+    --bg: #f3f2ef;
+    --surface: #fbfaf8;
+    --ink: #2a2b2e;
+    --muted: #75777c;
+    --line: #e1dfda;
+    --accent: #e8651a;
+    --accent-ink: #ffffff;
+    --accent-soft: #fbe6d8;
+    --late: #c23b32;
+    --late-soft: #f8dfdc;
+    --done: #8a8d92;
+    --shadow: 0 1px 2px rgba(40,38,34,.05), 0 6px 18px rgba(40,38,34,.05);
+    --font-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+    --font-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #18191b; --surface: #222326; --ink: #ecebe8; --muted: #9a9ca1; --line: #34353a;
+      --accent: #f0732b; --accent-ink: #1a120c; --accent-soft: #3a2619;
+      --late: #ef6b60; --late-soft: #3d2220; --done: #7d8086;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #18191b; --surface: #222326; --ink: #ecebe8; --muted: #9a9ca1; --line: #34353a;
+    --accent: #f0732b; --accent-ink: #1a120c; --accent-soft: #3a2619;
+    --late: #ef6b60; --late-soft: #3d2220; --done: #7d8086;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg); color: var(--ink);
+    font-family: var(--font-body); font-size: 18px; line-height: 1.5;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 40px 64px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+  h1, h2 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  h1 { font-size: 2.2rem; line-height: 1.1; font-weight: 700; }
+  .sub { color: var(--muted); margin: 6px 0 0; font-size: 1.05rem; }
+
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+
+  .head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-end; justify-content: space-between; }
+  .sync { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--muted); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--done); }
+  .sync.live .dot { background: var(--accent); }
+  .sync.err .dot { background: var(--late); }
+
+  /* Summary */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .stat { padding: 16px 18px; min-width: 0; }
+  .stat .n { font-family: var(--font-display); font-size: 2.4rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .stat .l { color: var(--muted); font-size: .95rem; margin-top: 6px; }
+  .stat.open .n { color: var(--accent); }
+  .stat.late .n { color: var(--late); }
+  .stat.late.zero .n { color: var(--ink); }
+  .progress { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+  .progress > span { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .3s; }
+  .progress-row { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: .95rem; }
+  .progress-row .progress { flex: 1; }
+
+  /* Form */
+  form.add { padding: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  form.add .full { grid-column: 1 / -1; }
+  form.add .ownerField { grid-column: span 2; }
+  form.add > div { min-width: 0; }
+  label { display: block; font-size: .9rem; font-weight: 600; margin-bottom: 6px; }
+  input[type="text"], input[type="date"] {
+    width: 100%; min-height: 48px; padding: 10px 14px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg);
+  }
+  input::placeholder { color: var(--muted); }
+  .btn {
+    min-height: 48px; padding: 10px 22px; border-radius: 10px; border: 0; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); font-weight: 600;
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 500; }
+  .btn.small { min-height: 40px; padding: 6px 14px; font-size: .95rem; }
+  form.add .actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+
+  /* Filters */
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { min-height: 40px; padding: 6px 16px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: .95rem; color: var(--muted); }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  .banner { padding: 12px 16px; border-radius: 12px; background: var(--late-soft); color: var(--late); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; font-size: .95rem; font-weight: 500; }
+
+  /* Owner cards */
+  .owners { display: flex; flex-direction: column; gap: 18px; }
+  .owner { overflow: hidden; }
+  .owner header { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; flex: none; }
+  .owner h2 { font-size: 1.3rem; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .count { color: var(--muted); font-size: .95rem; font-variant-numeric: tabular-nums; text-align: right; }
+  .count b { color: var(--late); font-weight: 600; }
+
+  ul { list-style: none; margin: 0; padding: 0; }
+  li.item { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: start; padding: 16px 20px; border-top: 1px solid var(--line); }
+  li.item:first-child { border-top: 0; }
+  li.item.overdue { background: var(--late-soft); }
+  .check { position: relative; width: 28px; height: 28px; margin: 2px 0 0; display: block; }
+  .check input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .check .box { position: absolute; inset: 0; border: 2px solid var(--muted); border-radius: 8px; background: var(--surface); display: grid; place-items: center; pointer-events: none; }
+  .check input:checked + .box { background: var(--accent); border-color: var(--accent); }
+  .check input:checked + .box::after { content: ""; width: 7px; height: 13px; border: solid var(--accent-ink); border-width: 0 3px 3px 0; transform: rotate(45deg) translate(-1px, -1px); }
+  .check input:focus-visible + .box { outline: 3px solid var(--accent); outline-offset: 2px; }
+  li.item.overdue .check .box { border-color: var(--late); }
+  .body { min-width: 0; }
+  .text { overflow-wrap: anywhere; }
+  .meta { font-size: .95rem; color: var(--muted); margin-top: 2px; }
+  li.item.overdue .meta { color: var(--late); font-weight: 600; }
+  li.item.done .text { text-decoration: line-through; color: var(--done); }
+  li.item.done .meta { color: var(--done); }
+  .del { width: 40px; height: 40px; border-radius: 10px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 1.4rem; line-height: 1; }
+  .del:hover { color: var(--late); background: var(--late-soft); }
+
+  .empty { padding: 36px 20px; text-align: center; color: var(--muted); }
+  .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 12px; display: flex; gap: 16px; align-items: center; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+  .toast button { background: none; border: 0; color: var(--accent); font-weight: 700; cursor: pointer; padding: 4px 8px; }
+
+  @media (max-width: 600px) {
+    body { font-size: 17px; padding-block: 28px 56px; }
+    h1 { font-size: 1.8rem; }
+    form.add { grid-template-columns: 1fr; }
+    form.add .ownerField { grid-column: auto; }
+    .stat { padding: 14px; }
+    .stat .n { font-size: 2rem; }
+    .owner header, li.item { padding-left: 14px; padding-right: 14px; }
+    .owner header { flex-wrap: wrap; }
+    .count { width: 100%; text-align: left; }
+  }
+  @media (prefers-reduced-motion: reduce) { .progress > span { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>Action Tracker</h1>
+      <p class="sub">Every action from the meeting, with one owner and one date.</p>
+    </div>
+    <span class="sync" id="sync" role="status"><span class="dot"></span><span id="syncText">Connecting…</span></span>
+  </div>
+
+  <section class="stats" aria-label="Summary">
+    <div class="card stat open"><div class="n" id="nOpen">0</div><div class="l">Open</div></div>
+    <div class="card stat"><div class="n" id="nDone">0</div><div class="l">Done</div></div>
+    <div class="card stat late zero" id="lateCard"><div class="n" id="nLate">0</div><div class="l">Overdue</div></div>
+  </section>
+  <div class="progress-row"><div class="progress" role="progressbar" aria-label="Share of actions done" id="pbar" aria-valuemin="0" aria-valuemax="100"><span id="pfill" style="width:0%"></span></div><span id="ptext">0% done</span></div>
+
+  <form class="card add" id="addForm" autocomplete="off">
+    <div class="full">
+      <label for="fText">Action</label>
+      <input type="text" id="fText" placeholder="e.g. Send revised quote to the client" required maxlength="160">
+    </div>
+    <div class="ownerField">
+      <label for="fOwner">Owner</label>
+      <input type="text" id="fOwner" list="ownerList" placeholder="Who is responsible?" required maxlength="40">
+      <datalist id="ownerList"></datalist>
+    </div>
+    <div>
+      <label for="fDue">Due date</label>
+      <input type="date" id="fDue" required>
+    </div>
+    <div class="actions"><button class="btn" type="submit" id="addBtn">Add action</button></div>
+  </form>
+
+  <div class="banner" id="banner" hidden>
+    <span id="bannerText"></span>
+    <button class="btn ghost small" id="retry" type="button">Try again</button>
+  </div>
+
+  <div class="bar">
+    <div class="chips" id="chips" role="group" aria-label="Filter actions">
+      <button class="chip" data-f="all" aria-pressed="true">All</button>
+      <button class="chip" data-f="open" aria-pressed="false">Open</button>
+      <button class="chip" data-f="overdue" aria-pressed="false">Overdue</button>
+      <button class="chip" data-f="done" aria-pressed="false">Done</button>
+    </div>
+  </div>
+
+  <div class="owners" id="owners"></div>
+</div>
+<div id="toastHost"></div>
+
+<script>
+(function () {
+  var SUPABASE_URL = "https://dfmockldmamitmnxmqju.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_qk_xAGiNCmGkhkE5C1vvdQ_KjBmwviA";
+  var ENDPOINT = SUPABASE_URL + "/rest/v1/actions";
+  var POLL_MS = 15000;
+
+  var actions = [];
+  var loaded = false;
+  var filter = "all";
+  var busy = 0;
+
+  /* ---------- dates ---------- */
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function iso(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function today() { return iso(new Date()); }
+  function addDays(n) { var d = new Date(); d.setDate(d.getDate() + n); return iso(d); }
+  function parse(s) { var p = s.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function dayDiff(s) { return Math.round((parse(s) - parse(today())) / 86400000); }
+  function isOverdue(a) { return !a.done && dayDiff(a.due) < 0; }
+  function fmtDate(s) { return parse(s).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }); }
+  function metaText(a) {
+    var d = dayDiff(a.due), base = fmtDate(a.due);
+    if (a.done) return "Done · was due " + base;
+    if (d < 0) return "Overdue by " + (-d) + (d === -1 ? " day" : " days") + " · " + base;
+    if (d === 0) return "Due today · " + base;
+    if (d === 1) return "Due tomorrow · " + base;
+    return "Due " + base + " · in " + d + " days";
+  }
+
+  /* ---------- Supabase REST ---------- */
+  function api(query, opts) {
+    opts = opts || {};
+    var headers = { "apikey": SUPABASE_KEY, "Content-Type": "application/json" };
+    if (opts.prefer) headers["Prefer"] = opts.prefer;
+    return fetch(ENDPOINT + (query || ""), {
+      method: opts.method || "GET",
+      headers: headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined
+    }).then(function (res) {
+      if (!res.ok) {
+        return res.text().then(function (t) { throw new Error("Request failed (" + res.status + ") " + t.slice(0, 160)); });
+      }
+      return res.status === 204 ? null : res.text().then(function (t) { return t ? JSON.parse(t) : null; });
+    });
+  }
+
+  function setSync(kind, text) {
+    var s = document.getElementById("sync");
+    s.className = "sync " + kind;
+    document.getElementById("syncText").textContent = text;
+  }
+  function showError(msg) {
+    document.getElementById("bannerText").textContent = msg;
+    document.getElementById("banner").hidden = false;
+    setSync("err", "Offline");
+  }
+  function clearError() { document.getElementById("banner").hidden = true; }
+
+  function fetchAll() {
+    if (busy > 0) return Promise.resolve();
+    return api("?select=*&order=due.asc,created_at.asc").then(function (rows) {
+      if (busy > 0) return;
+      actions = rows || [];
+      loaded = true;
+      clearError();
+      var t = new Date();
+      setSync("live", "Live · synced " + pad(t.getHours()) + ":" + pad(t.getMinutes()));
+      render();
+    }).catch(function (e) {
+      showError(loaded ? "Could not refresh. Showing the last data received. " + e.message : "Could not load actions. " + e.message);
+      render();
+    });
+  }
+
+  /* ---------- rendering ---------- */
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function render() {
+    var open = 0, done = 0, late = 0;
+    actions.forEach(function (a) { if (a.done) done++; else { open++; if (isOverdue(a)) late++; } });
+    document.getElementById("nOpen").textContent = open;
+    document.getElementById("nDone").textContent = done;
+    document.getElementById("nLate").textContent = late;
+    document.getElementById("lateCard").classList.toggle("zero", late === 0);
+    var total = open + done, pct = total ? Math.round(done / total * 100) : 0;
+    document.getElementById("pfill").style.width = pct + "%";
+    document.getElementById("pbar").setAttribute("aria-valuenow", pct);
+    document.getElementById("ptext").textContent = pct + "% done";
+
+    var owners = {};
+    actions.forEach(function (a) { var k = a.owner.trim(); (owners[k] = owners[k] || []).push(a); });
+    var names = Object.keys(owners).sort(function (a, b) { return a.localeCompare(b); });
+
+    var dl = document.getElementById("ownerList"); dl.textContent = "";
+    names.forEach(function (n) { var o = document.createElement("option"); o.value = n; dl.appendChild(o); });
+
+    var host = document.getElementById("owners"); host.textContent = "";
+    if (!loaded) { host.appendChild(el("div", "card empty", "Loading actions…")); return; }
+
+    var shown = 0;
+    names.forEach(function (name) {
+      var list = owners[name].slice().sort(function (a, b) {
+        if (a.done !== b.done) return a.done ? 1 : -1;
+        return a.due < b.due ? -1 : a.due > b.due ? 1 : 0;
+      }).filter(function (a) {
+        return filter === "all" || (filter === "open" && !a.done) || (filter === "done" && a.done) || (filter === "overdue" && isOverdue(a));
+      });
+      if (!list.length) return;
+      shown++;
+      var all = owners[name], o = all.filter(function (a) { return !a.done; }).length, l = all.filter(isOverdue).length;
+      var card = el("section", "card owner");
+      var head = el("header");
+      head.appendChild(el("div", "avatar", name.charAt(0).toUpperCase()));
+      head.appendChild(el("h2", null, name));
+      var c = el("span", "count");
+      c.appendChild(document.createTextNode(o + " open"));
+      if (l) { c.appendChild(document.createTextNode(" · ")); c.appendChild(el("b", null, l + " overdue")); }
+      c.appendChild(document.createTextNode(" · " + (all.length - o) + " done"));
+      head.appendChild(c);
+      card.appendChild(head);
+      var ul = el("ul");
+      list.forEach(function (a) {
+        var li = el("li", "item" + (a.done ? " done" : "") + (isOverdue(a) ? " overdue" : ""));
+        var chk = el("label", "check");
+        var inp = document.createElement("input"); inp.type = "checkbox"; inp.checked = a.done;
+        inp.setAttribute("aria-label", "Mark done: " + a.text);
+        inp.addEventListener("change", function () { setDone(a, inp.checked); });
+        chk.appendChild(inp); chk.appendChild(el("span", "box"));
+        var body = el("div", "body");
+        body.appendChild(el("div", "text", a.text));
+        body.appendChild(el("div", "meta", metaText(a)));
+        var del = el("button", "del", "×"); del.type = "button"; del.setAttribute("aria-label", "Delete: " + a.text);
+        del.addEventListener("click", function () { removeAction(a); });
+        li.appendChild(chk); li.appendChild(body); li.appendChild(del);
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+      host.appendChild(card);
+    });
+    if (!shown) {
+      host.appendChild(el("div", "card empty", actions.length ? "No actions match this filter." : "No actions yet. Add the first one above, with an owner and a due date."));
+    }
+  }
+
+  var toastTimer;
+  function toast(msg, undo) {
+    var host = document.getElementById("toastHost"); host.textContent = "";
+    var t = el("div", "toast"); t.setAttribute("role", "status");
+    t.appendChild(el("span", null, msg));
+    if (undo) { var b = el("button", null, "Undo"); b.type = "button"; b.addEventListener("click", function () { undo(); host.textContent = ""; }); t.appendChild(b); }
+    host.appendChild(t);
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { host.textContent = ""; }, 5000);
+  }
+
+  /* ---------- mutations (optimistic, reverted on failure) ---------- */
+  function mutate(promiseFn, revert, failMsg) {
+    busy++;
+    return promiseFn().then(function (r) { busy--; return r; }).catch(function (e) {
+      busy--;
+      if (revert) revert();
+      render();
+      toast(failMsg + " " + e.message.slice(0, 80));
+      setSync("err", "Change not saved");
+    });
+  }
+
+  function setDone(a, done) {
+    var prevDone = a.done, prevAt = a.done_at;
+    a.done = done; a.done_at = done ? new Date().toISOString() : null;
+    render();
+    mutate(function () {
+      return api("?id=eq." + encodeURIComponent(a.id), { method: "PATCH", body: { done: a.done, done_at: a.done_at } });
+    }, function () { a.done = prevDone; a.done_at = prevAt; }, "Could not update.").then(function () { return fetchAll(); });
+  }
+
+  function removeAction(a) {
+    var idx = actions.indexOf(a);
+    if (idx < 0) return;
+    actions.splice(idx, 1);
+    render();
+    mutate(function () {
+      return api("?id=eq." + encodeURIComponent(a.id), { method: "DELETE" });
+    }, function () { actions.splice(idx, 0, a); }, "Could not delete.").then(function () {
+      toast("Action deleted", function () {
+        mutate(function () {
+          return api("", { method: "POST", prefer: "return=minimal", body: { id: a.id, text: a.text, owner: a.owner, due: a.due, done: a.done, done_at: a.done_at, created_at: a.created_at } });
+        }, null, "Could not restore.").then(fetchAll);
+      });
+      fetchAll();
+    });
+  }
+
+  document.getElementById("addForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var text = document.getElementById("fText").value.trim();
+    var owner = document.getElementById("fOwner").value.trim();
+    var due = document.getElementById("fDue").value;
+    if (!text || !owner || !due) return;
+    var existing = actions.find(function (a) { return a.owner.toLowerCase() === owner.toLowerCase(); });
+    if (existing) owner = existing.owner;
+    var btn = document.getElementById("addBtn"); btn.disabled = true;
+    mutate(function () {
+      return api("", { method: "POST", prefer: "return=representation", body: { text: text, owner: owner, due: due } });
+    }, null, "Could not add the action.").then(function (rows) {
+      btn.disabled = false;
+      if (rows && rows[0]) {
+        actions.push(rows[0]);
+        document.getElementById("fText").value = "";
+        document.getElementById("fText").focus();
+        toast("Action added for " + owner);
+        render();
+        setSync("live", "Live · saved");
+      }
+    });
+  });
+
+  document.getElementById("retry").addEventListener("click", function () { setSync("", "Connecting…"); fetchAll(); });
+
+  document.getElementById("chips").addEventListener("click", function (e) {
+    var b = e.target.closest(".chip"); if (!b) return;
+    filter = b.dataset.f;
+    document.querySelectorAll(".chip").forEach(function (c) { c.setAttribute("aria-pressed", c === b ? "true" : "false"); });
+    render();
+  });
+
+  document.getElementById("fDue").value = addDays(7);
+  render();
+  fetchAll();
+  setInterval(function () { if (!document.hidden) fetchAll(); }, POLL_MS);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) fetchAll(); });
+})();
+</script>
+</body>
+</html>
