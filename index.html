@@ -7,8 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
-  /* Layout: one centred column. Summary strip, add form, then one card per owner. */
+  /* Layout: one centred column. Sign-in card, or summary strip, add form, team panel (admins), owner cards. */
   :root {
     color-scheme: light;
     --bg: #f3f2ef;
@@ -44,6 +45,7 @@
   }
 
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     background: var(--bg); color: var(--ink);
@@ -54,20 +56,30 @@
     -webkit-font-smoothing: antialiased;
   }
   .wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
-  h1, h2 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
   h1 { font-size: 2.2rem; line-height: 1.1; font-weight: 700; }
+  h3 { font-size: 1.15rem; }
   .sub { color: var(--muted); margin: 6px 0 0; font-size: 1.05rem; }
 
-  button, input { font: inherit; color: inherit; }
+  button, input, select { font: inherit; color: inherit; }
   :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
 
-  .head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-end; justify-content: space-between; }
+  .head { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; justify-content: space-between; }
+  .who { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .who .name { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+  .who .name small { color: var(--muted); font-weight: 400; font-size: .9rem; }
   .sync { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--muted); }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--done); }
   .sync.live .dot { background: var(--accent); }
   .sync.err .dot { background: var(--late); }
+
+  /* Sign in */
+  .login { max-width: 420px; margin: 8vh auto 0; padding: 28px; display: flex; flex-direction: column; gap: 16px; width: 100%; }
+  .login p { margin: 0; color: var(--muted); }
+  .formerr { color: var(--late); font-size: .95rem; font-weight: 500; min-height: 1.4em; margin: 0; }
+  .formok { color: var(--ink); font-size: .95rem; font-weight: 500; margin: 0; }
 
   /* Summary */
   .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -82,13 +94,13 @@
   .progress-row { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: .95rem; }
   .progress-row .progress { flex: 1; }
 
-  /* Form */
-  form.add { padding: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-  form.add .full { grid-column: 1 / -1; }
-  form.add .ownerField { grid-column: span 2; }
-  form.add > div { min-width: 0; }
+  /* Forms */
+  form.grid { padding: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  form.grid .full { grid-column: 1 / -1; }
+  form.grid .span2 { grid-column: span 2; }
+  form.grid > div { min-width: 0; }
   label { display: block; font-size: .9rem; font-weight: 600; margin-bottom: 6px; }
-  input[type="text"], input[type="date"] {
+  input[type="text"], input[type="password"], input[type="date"], select {
     width: 100%; min-height: 48px; padding: 10px 14px; border-radius: 10px;
     border: 1px solid var(--line); background: var(--bg);
   }
@@ -101,7 +113,24 @@
   .btn:disabled { opacity: .6; cursor: default; }
   .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 500; }
   .btn.small { min-height: 40px; padding: 6px 14px; font-size: .95rem; }
-  form.add .actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+  form.grid .actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+
+  /* Team panel (admins) */
+  .team { padding: 0; overflow: hidden; }
+  .team > summary { list-style: none; cursor: pointer; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-family: var(--font-display); font-weight: 600; font-size: 1.15rem; }
+  .team > summary::-webkit-details-marker { display: none; }
+  .team > summary small { font-family: var(--font-body); font-weight: 400; color: var(--muted); font-size: .95rem; }
+  .team[open] > summary { border-bottom: 1px solid var(--line); }
+  .team .inner { display: flex; flex-direction: column; }
+  .team ul.people { border-bottom: 1px solid var(--line); }
+  .team ul.people li { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--line); }
+  .team ul.people li:first-child { border-top: 0; }
+  .team ul.people .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .team ul.people .un { color: var(--muted); font-size: .95rem; }
+  .pill { font-size: .8rem; font-weight: 600; padding: 2px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+  .pill.m { background: var(--line); color: var(--muted); }
+  .team h3 { padding: 16px 20px 0; }
+  .team form.grid { box-shadow: none; border: 0; }
 
   /* Filters */
   .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
@@ -147,11 +176,12 @@
   @media (max-width: 600px) {
     body { font-size: 17px; padding-block: 28px 56px; }
     h1 { font-size: 1.8rem; }
-    form.add { grid-template-columns: 1fr; }
-    form.add .ownerField { grid-column: auto; }
+    .who { align-items: flex-start; }
+    form.grid { grid-template-columns: 1fr; }
+    form.grid .span2 { grid-column: auto; }
     .stat { padding: 14px; }
     .stat .n { font-size: 2rem; }
-    .owner header, li.item { padding-left: 14px; padding-right: 14px; }
+    .owner header, li.item, .team ul.people li { padding-left: 14px; padding-right: 14px; }
     .owner header { flex-wrap: wrap; }
     .count { width: 100%; text-align: left; }
   }
@@ -159,13 +189,41 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<!-- Sign in -->
+<main id="loginView" hidden>
+  <form class="card login" id="loginForm" autocomplete="on">
+    <div>
+      <h1>Action Tracker</h1>
+      <p class="sub">Sign in to see your team's actions.</p>
+    </div>
+    <div>
+      <label for="lUser">Username</label>
+      <input type="text" id="lUser" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required maxlength="20">
+    </div>
+    <div>
+      <label for="lPass">Password</label>
+      <input type="password" id="lPass" name="password" autocomplete="current-password" required>
+    </div>
+    <p class="formerr" id="loginErr" role="alert"></p>
+    <button class="btn" type="submit" id="loginBtn">Sign in</button>
+  </form>
+</main>
+
+<!-- App -->
+<div class="wrap" id="appView" hidden>
   <div class="head">
     <div>
       <h1>Action Tracker</h1>
       <p class="sub">Every action from the meeting, with one owner and one date.</p>
     </div>
-    <span class="sync" id="sync" role="status"><span class="dot"></span><span id="syncText">Connecting…</span></span>
+    <div class="who">
+      <div class="name"><span id="whoName"></span><small id="whoRole"></small></div>
+      <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+        <span class="sync" id="sync" role="status"><span class="dot"></span><span id="syncText">Connecting…</span></span>
+        <button class="btn ghost small" type="button" id="signOut">Sign out</button>
+      </div>
+    </div>
   </div>
 
   <section class="stats" aria-label="Summary">
@@ -175,22 +233,48 @@
   </section>
   <div class="progress-row"><div class="progress" role="progressbar" aria-label="Share of actions done" id="pbar" aria-valuemin="0" aria-valuemax="100"><span id="pfill" style="width:0%"></span></div><span id="ptext">0% done</span></div>
 
-  <form class="card add" id="addForm" autocomplete="off">
+  <form class="card grid" id="addForm" autocomplete="off">
     <div class="full">
       <label for="fText">Action</label>
       <input type="text" id="fText" placeholder="e.g. Send revised quote to the client" required maxlength="160">
     </div>
-    <div class="ownerField">
+    <div class="span2">
       <label for="fOwner">Owner</label>
-      <input type="text" id="fOwner" list="ownerList" placeholder="Who is responsible?" required maxlength="40">
-      <datalist id="ownerList"></datalist>
+      <select id="fOwner" required></select>
     </div>
     <div>
       <label for="fDue">Due date</label>
       <input type="date" id="fDue" required>
     </div>
-    <div class="actions"><button class="btn" type="submit" id="addBtn">Add action</button></div>
+    <div class="actions"><span></span><button class="btn" type="submit" id="addBtn">Add action</button></div>
   </form>
+
+  <details class="card team" id="teamPanel" hidden>
+    <summary><span>Team</span><small id="teamCount"></small></summary>
+    <div class="inner">
+      <ul class="people" id="people"></ul>
+      <h3>Add a user</h3>
+      <form class="grid" id="userForm" autocomplete="off">
+        <div>
+          <label for="uName">Username</label>
+          <input type="text" id="uName" placeholder="e.g. alex" autocapitalize="none" spellcheck="false" required maxlength="20">
+        </div>
+        <div>
+          <label for="uDisplay">Display name</label>
+          <input type="text" id="uDisplay" placeholder="e.g. Alex" maxlength="40">
+        </div>
+        <div>
+          <label for="uRole">Role</label>
+          <select id="uRole"><option value="member">Member</option><option value="admin">Admin</option></select>
+        </div>
+        <div class="span2">
+          <label for="uPass">Initial password</label>
+          <input type="text" id="uPass" placeholder="At least 6 characters" autocomplete="off" required minlength="6" maxlength="72">
+        </div>
+        <div class="actions"><p class="formerr" id="userMsg" role="alert" style="flex:1"></p><button class="btn" type="submit" id="userBtn">Add user</button></div>
+      </form>
+    </div>
+  </details>
 
   <div class="banner" id="banner" hidden>
     <span id="bannerText"></span>
@@ -214,13 +298,23 @@
 (function () {
   var SUPABASE_URL = "https://dfmockldmamitmnxmqju.supabase.co";
   var SUPABASE_KEY = "sb_publishable_qk_xAGiNCmGkhkE5C1vvdQ_KjBmwviA";
-  var ENDPOINT = SUPABASE_URL + "/rest/v1/actions";
+  var EMAIL_DOMAIN = "action-tracker.example";   // usernames map to username@this domain in Supabase Auth
   var POLL_MS = 15000;
 
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+  });
+
+  var me = null;            // profile of the signed-in user
+  var people = [];          // all profiles
   var actions = [];
   var loaded = false;
   var filter = "all";
   var busy = 0;
+  var pollTimer = null;
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
   /* ---------- dates ---------- */
   function pad(n) { return (n < 10 ? "0" : "") + n; }
@@ -240,74 +334,243 @@
     return "Due " + base + " · in " + d + " days";
   }
 
-  /* ---------- Supabase REST ---------- */
-  function api(query, opts) {
-    opts = opts || {};
-    var headers = { "apikey": SUPABASE_KEY, "Content-Type": "application/json" };
-    if (opts.prefer) headers["Prefer"] = opts.prefer;
-    return fetch(ENDPOINT + (query || ""), {
-      method: opts.method || "GET",
-      headers: headers,
-      body: opts.body ? JSON.stringify(opts.body) : undefined
-    }).then(function (res) {
-      if (!res.ok) {
-        return res.text().then(function (t) { throw new Error("Request failed (" + res.status + ") " + t.slice(0, 160)); });
+  /* ---------- status ---------- */
+  function setSync(kind, text) { $("sync").className = "sync " + kind; $("syncText").textContent = text; }
+  function showError(msg) { $("bannerText").textContent = msg; $("banner").hidden = false; setSync("err", "Offline"); }
+  function clearError() { $("banner").hidden = true; }
+
+  var toastTimer;
+  function toast(msg, undo) {
+    var host = $("toastHost"); host.textContent = "";
+    var t = el("div", "toast"); t.setAttribute("role", "status");
+    t.appendChild(el("span", null, msg));
+    if (undo) { var b = el("button", null, "Undo"); b.type = "button"; b.addEventListener("click", function () { undo(); host.textContent = ""; }); t.appendChild(b); }
+    host.appendChild(t);
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { host.textContent = ""; }, 5000);
+  }
+
+  /* ---------- views ---------- */
+  function showLogin() {
+    stopPolling();
+    me = null; people = []; actions = []; loaded = false;
+    $("appView").hidden = true;
+    $("loginView").hidden = false;
+    $("lPass").value = "";
+    $("lUser").value = "";
+    $("loginErr").textContent = "";
+    $("loginBtn").disabled = false;
+    $("lUser").focus();
+  }
+
+  function showApp() {
+    $("loginView").hidden = true;
+    $("appView").hidden = false;
+    $("whoName").textContent = me.display_name;
+    $("whoRole").textContent = me.role === "admin" ? "Admin" : "Member";
+    $("teamPanel").hidden = me.role !== "admin";
+    setSync("", "Connecting…");
+    render();
+    refresh();
+    startPolling();
+  }
+
+  function startPolling() { stopPolling(); pollTimer = setInterval(function () { if (!document.hidden) refresh(); }, POLL_MS); }
+  function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+  /* ---------- auth ---------- */
+  function userToEmail(u) { return u.trim().toLowerCase() + "@" + EMAIL_DOMAIN; }
+
+  $("loginForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var u = $("lUser").value, p = $("lPass").value;
+    if (!u.trim() || !p) return;
+    $("loginBtn").disabled = true; $("loginErr").textContent = "";
+    sb.auth.signInWithPassword({ email: userToEmail(u), password: p }).then(function (r) {
+      if (r.error) {
+        $("loginBtn").disabled = false;
+        $("loginErr").textContent = r.error.status === 400 || /invalid/i.test(r.error.message) ? "Username or password is incorrect." : "Could not sign in. " + r.error.message;
+        return;
       }
-      return res.status === 204 ? null : res.text().then(function (t) { return t ? JSON.parse(t) : null; });
+      return enter(r.data.session.user);
+    }).catch(function () { $("loginBtn").disabled = false; $("loginErr").textContent = "Could not reach the server. Check your connection and try again."; });
+  });
+
+  $("signOut").addEventListener("click", function () {
+    sb.auth.signOut().then(showLogin, showLogin);
+  });
+
+  function enter(user) {
+    return sb.from("profiles").select("*").eq("id", user.id).maybeSingle().then(function (r) {
+      if (r.error || !r.data) {
+        return sb.auth.signOut().then(function () {
+          showLogin();
+          $("loginErr").textContent = "This account has no profile. Ask an admin to add you.";
+        });
+      }
+      me = r.data;
+      showApp();
     });
   }
 
-  function setSync(kind, text) {
-    var s = document.getElementById("sync");
-    s.className = "sync " + kind;
-    document.getElementById("syncText").textContent = text;
-  }
-  function showError(msg) {
-    document.getElementById("bannerText").textContent = msg;
-    document.getElementById("banner").hidden = false;
-    setSync("err", "Offline");
-  }
-  function clearError() { document.getElementById("banner").hidden = true; }
+  sb.auth.onAuthStateChange(function (event) {
+    if (event === "SIGNED_OUT" && me) showLogin();
+  });
 
-  function fetchAll() {
-    if (busy > 0) return Promise.resolve();
-    return api("?select=*&order=due.asc,created_at.asc").then(function (rows) {
+  /* ---------- data ---------- */
+  function refresh() {
+    if (busy > 0 || !me) return Promise.resolve();
+    return Promise.all([
+      sb.from("actions").select("*").order("due", { ascending: true }).order("created_at", { ascending: true }),
+      sb.from("profiles").select("*").order("display_name", { ascending: true })
+    ]).then(function (res) {
       if (busy > 0) return;
-      actions = rows || [];
+      var a = res[0], p = res[1];
+      if (a.error || p.error) throw (a.error || p.error);
+      actions = a.data || []; people = p.data || [];
       loaded = true;
       clearError();
       var t = new Date();
       setSync("live", "Live · synced " + pad(t.getHours()) + ":" + pad(t.getMinutes()));
       render();
     }).catch(function (e) {
-      showError(loaded ? "Could not refresh. Showing the last data received. " + e.message : "Could not load actions. " + e.message);
+      if (e && (e.status === 401 || /JWT/i.test(e.message || ""))) { sb.auth.signOut().then(showLogin, showLogin); return; }
+      showError(loaded ? "Could not refresh. Showing the last data received." : "Could not load actions. " + (e && e.message ? e.message : ""));
       render();
     });
   }
 
+  function mutate(run, revert, failMsg) {
+    busy++;
+    return run().then(function (r) {
+      busy--;
+      if (r && r.error) throw r.error;
+      return r;
+    }).catch(function (e) {
+      busy--;
+      if (revert) revert();
+      render();
+      toast(failMsg);
+      setSync("err", "Change not saved");
+    });
+  }
+
+  function setDone(a, done) {
+    var prevDone = a.done, prevAt = a.done_at;
+    a.done = done; a.done_at = done ? new Date().toISOString() : null;
+    render();
+    mutate(function () { return sb.from("actions").update({ done: a.done, done_at: a.done_at }).eq("id", a.id); },
+      function () { a.done = prevDone; a.done_at = prevAt; }, "Could not update that action.").then(refresh);
+  }
+
+  function removeAction(a) {
+    var idx = actions.indexOf(a);
+    if (idx < 0) return;
+    actions.splice(idx, 1);
+    render();
+    mutate(function () { return sb.from("actions").delete().eq("id", a.id); },
+      function () { actions.splice(idx, 0, a); }, "Could not delete that action.").then(function () {
+      toast("Action deleted", function () {
+        mutate(function () {
+          return sb.from("actions").insert({ id: a.id, text: a.text, owner: a.owner, owner_id: a.owner_id, due: a.due, done: a.done, done_at: a.done_at, created_at: a.created_at });
+        }, null, "Could not restore that action.").then(refresh);
+      });
+      refresh();
+    });
+  }
+
+  $("addForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var text = $("fText").value.trim(), ownerId = $("fOwner").value, due = $("fDue").value;
+    var owner = people.find(function (p) { return p.id === ownerId; });
+    if (!text || !owner || !due) return;
+    var btn = $("addBtn"); btn.disabled = true;
+    mutate(function () {
+      return sb.from("actions").insert({ text: text, owner: owner.display_name, owner_id: owner.id, due: due }).select().single();
+    }, null, "Could not add the action.").then(function (r) {
+      btn.disabled = false;
+      if (r && r.data) {
+        actions.push(r.data);
+        $("fText").value = "";
+        $("fText").focus();
+        toast("Action added for " + owner.display_name);
+        render();
+        setSync("live", "Live · saved");
+      }
+    });
+  });
+
+  /* ---------- user management (admins) ---------- */
+  $("userForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msg = $("userMsg"); msg.className = "formerr"; msg.textContent = "";
+    var body = {
+      username: $("uName").value.trim().toLowerCase(),
+      display_name: $("uDisplay").value.trim(),
+      password: $("uPass").value,
+      role: $("uRole").value
+    };
+    if (!/^[a-z0-9_]{3,20}$/.test(body.username)) { msg.textContent = "Username must be 3 to 20 characters: letters, numbers or underscores."; return; }
+    if (body.password.length < 6) { msg.textContent = "Password must be at least 6 characters."; return; }
+    var btn = $("userBtn"); btn.disabled = true;
+    sb.functions.invoke("admin-users", { body: body }).then(function (r) {
+      btn.disabled = false;
+      if (r.error) {
+        var ctx = r.error.context;
+        if (ctx && typeof ctx.json === "function") {
+          return ctx.json().then(function (j) { msg.textContent = j.error || "Could not add the user."; }, function () { msg.textContent = "Could not add the user."; });
+        }
+        msg.textContent = "Could not add the user.";
+        return;
+      }
+      var u = r.data.user;
+      msg.className = "formok";
+      msg.textContent = u.display_name + " can now sign in as “" + u.username + "” with the initial password.";
+      $("userForm").reset();
+      refresh();
+    }).catch(function () { btn.disabled = false; msg.textContent = "Could not reach the server."; });
+  });
+
   /* ---------- rendering ---------- */
-  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function renderTeam() {
+    $("teamCount").textContent = people.length + (people.length === 1 ? " user" : " users");
+    var ul = $("people"); ul.textContent = "";
+    people.forEach(function (p) {
+      var li = el("li");
+      li.appendChild(el("div", "avatar", p.display_name.charAt(0).toUpperCase()));
+      var nm = el("div", "nm"); nm.appendChild(document.createTextNode(p.display_name + " "));
+      nm.appendChild(el("span", "un", "@" + p.username));
+      li.appendChild(nm);
+      li.appendChild(el("span", "pill" + (p.role === "admin" ? "" : " m"), p.role === "admin" ? "Admin" : "Member"));
+      ul.appendChild(li);
+    });
+  }
+
+  function renderOwnerSelect() {
+    var sel = $("fOwner"), keep = sel.value || (me && me.id);
+    sel.textContent = "";
+    people.forEach(function (p) { var o = document.createElement("option"); o.value = p.id; o.textContent = p.display_name; sel.appendChild(o); });
+    if (keep && people.some(function (p) { return p.id === keep; })) sel.value = keep;
+  }
 
   function render() {
+    if (!me) return;
     var open = 0, done = 0, late = 0;
     actions.forEach(function (a) { if (a.done) done++; else { open++; if (isOverdue(a)) late++; } });
-    document.getElementById("nOpen").textContent = open;
-    document.getElementById("nDone").textContent = done;
-    document.getElementById("nLate").textContent = late;
-    document.getElementById("lateCard").classList.toggle("zero", late === 0);
+    $("nOpen").textContent = open; $("nDone").textContent = done; $("nLate").textContent = late;
+    $("lateCard").classList.toggle("zero", late === 0);
     var total = open + done, pct = total ? Math.round(done / total * 100) : 0;
-    document.getElementById("pfill").style.width = pct + "%";
-    document.getElementById("pbar").setAttribute("aria-valuenow", pct);
-    document.getElementById("ptext").textContent = pct + "% done";
+    $("pfill").style.width = pct + "%";
+    $("pbar").setAttribute("aria-valuenow", pct);
+    $("ptext").textContent = pct + "% done";
+
+    renderOwnerSelect();
+    if (me.role === "admin") renderTeam();
 
     var owners = {};
     actions.forEach(function (a) { var k = a.owner.trim(); (owners[k] = owners[k] || []).push(a); });
     var names = Object.keys(owners).sort(function (a, b) { return a.localeCompare(b); });
 
-    var dl = document.getElementById("ownerList"); dl.textContent = "";
-    names.forEach(function (n) { var o = document.createElement("option"); o.value = n; dl.appendChild(o); });
-
-    var host = document.getElementById("owners"); host.textContent = "";
+    var host = $("owners"); host.textContent = "";
     if (!loaded) { host.appendChild(el("div", "card empty", "Loading actions…")); return; }
 
     var shown = 0;
@@ -355,92 +618,23 @@
     }
   }
 
-  var toastTimer;
-  function toast(msg, undo) {
-    var host = document.getElementById("toastHost"); host.textContent = "";
-    var t = el("div", "toast"); t.setAttribute("role", "status");
-    t.appendChild(el("span", null, msg));
-    if (undo) { var b = el("button", null, "Undo"); b.type = "button"; b.addEventListener("click", function () { undo(); host.textContent = ""; }); t.appendChild(b); }
-    host.appendChild(t);
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { host.textContent = ""; }, 5000);
-  }
+  $("retry").addEventListener("click", function () { setSync("", "Connecting…"); refresh(); });
 
-  /* ---------- mutations (optimistic, reverted on failure) ---------- */
-  function mutate(promiseFn, revert, failMsg) {
-    busy++;
-    return promiseFn().then(function (r) { busy--; return r; }).catch(function (e) {
-      busy--;
-      if (revert) revert();
-      render();
-      toast(failMsg + " " + e.message.slice(0, 80));
-      setSync("err", "Change not saved");
-    });
-  }
-
-  function setDone(a, done) {
-    var prevDone = a.done, prevAt = a.done_at;
-    a.done = done; a.done_at = done ? new Date().toISOString() : null;
-    render();
-    mutate(function () {
-      return api("?id=eq." + encodeURIComponent(a.id), { method: "PATCH", body: { done: a.done, done_at: a.done_at } });
-    }, function () { a.done = prevDone; a.done_at = prevAt; }, "Could not update.").then(function () { return fetchAll(); });
-  }
-
-  function removeAction(a) {
-    var idx = actions.indexOf(a);
-    if (idx < 0) return;
-    actions.splice(idx, 1);
-    render();
-    mutate(function () {
-      return api("?id=eq." + encodeURIComponent(a.id), { method: "DELETE" });
-    }, function () { actions.splice(idx, 0, a); }, "Could not delete.").then(function () {
-      toast("Action deleted", function () {
-        mutate(function () {
-          return api("", { method: "POST", prefer: "return=minimal", body: { id: a.id, text: a.text, owner: a.owner, due: a.due, done: a.done, done_at: a.done_at, created_at: a.created_at } });
-        }, null, "Could not restore.").then(fetchAll);
-      });
-      fetchAll();
-    });
-  }
-
-  document.getElementById("addForm").addEventListener("submit", function (e) {
-    e.preventDefault();
-    var text = document.getElementById("fText").value.trim();
-    var owner = document.getElementById("fOwner").value.trim();
-    var due = document.getElementById("fDue").value;
-    if (!text || !owner || !due) return;
-    var existing = actions.find(function (a) { return a.owner.toLowerCase() === owner.toLowerCase(); });
-    if (existing) owner = existing.owner;
-    var btn = document.getElementById("addBtn"); btn.disabled = true;
-    mutate(function () {
-      return api("", { method: "POST", prefer: "return=representation", body: { text: text, owner: owner, due: due } });
-    }, null, "Could not add the action.").then(function (rows) {
-      btn.disabled = false;
-      if (rows && rows[0]) {
-        actions.push(rows[0]);
-        document.getElementById("fText").value = "";
-        document.getElementById("fText").focus();
-        toast("Action added for " + owner);
-        render();
-        setSync("live", "Live · saved");
-      }
-    });
-  });
-
-  document.getElementById("retry").addEventListener("click", function () { setSync("", "Connecting…"); fetchAll(); });
-
-  document.getElementById("chips").addEventListener("click", function (e) {
+  $("chips").addEventListener("click", function (e) {
     var b = e.target.closest(".chip"); if (!b) return;
     filter = b.dataset.f;
     document.querySelectorAll(".chip").forEach(function (c) { c.setAttribute("aria-pressed", c === b ? "true" : "false"); });
     render();
   });
 
-  document.getElementById("fDue").value = addDays(7);
-  render();
-  fetchAll();
-  setInterval(function () { if (!document.hidden) fetchAll(); }, POLL_MS);
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) fetchAll(); });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(); });
+
+  /* ---------- start ---------- */
+  $("fDue").value = addDays(7);
+  sb.auth.getSession().then(function (r) {
+    if (r.data && r.data.session) return enter(r.data.session.user);
+    showLogin();
+  }).catch(showLogin);
 })();
 </script>
 </body>
